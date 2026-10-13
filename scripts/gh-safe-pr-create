@@ -10,7 +10,8 @@
 #   TAUCETI_AUTHOR_CLAIM_KEY   the author/<area>/<target-id> claim acquired in shell before the agent ran
 #   TAUCETI_TARGET_MARKER      the exact <!--tauceti-target:v1 {...}--> string the PR body must contain
 #   TAUCETI_CLAIM_SH           path to claim.sh (default: alongside this script)
-#   TAUCETI_HOLD_PR_DIR        if set, save the PR's args and body there instead of opening it
+#   TAUCETI_HOLD_PR_DIR        if set, save the PR's args and body in a fresh subdirectory of it instead of
+#                              opening it
 # All `gh pr create` flags pass through unchanged.
 set -uo pipefail
 
@@ -59,10 +60,13 @@ fi
 
 # 3) Operator hold (host rounds): save the would-be PR instead of opening it, so a human reads the
 #    exact title, body and branch first. The branch is already on the fork, but nothing reaches the
-#    base repository's review queue until the operator opens the PR from the saved files.
-HOLD_DIR="${TAUCETI_HOLD_PR_DIR:-}"
-if [[ -n "$HOLD_DIR" ]]; then
-    mkdir -p "$HOLD_DIR" || die "cannot create the hold directory $HOLD_DIR"
+#    base repository's review queue until the operator opens the PR from the saved files. Each held
+#    PR gets its own subdirectory, so a loop that holds several never overwrites an unread one.
+HOLD_ROOT="${TAUCETI_HOLD_PR_DIR:-}"
+if [[ -n "$HOLD_ROOT" ]]; then
+    mkdir -p "$HOLD_ROOT" || die "cannot create the hold directory $HOLD_ROOT"
+    HOLD_DIR="$(mktemp -d "$HOLD_ROOT/$(date -u +%Y%m%d-%H%M%S)-XXXXXX")" \
+        || die "cannot create a subdirectory of the hold directory $HOLD_ROOT"
     pr_body_from_args "$@" > "$HOLD_DIR/body.md"
     printf '%q\n' "$@" > "$HOLD_DIR/args"
     echo "gh-safe-pr-create: HELD for operator review in $HOLD_DIR — the PR was NOT opened." >&2

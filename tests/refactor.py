@@ -8,6 +8,7 @@ away from examined declarations, and what do_refactor hands the agent on the hos
 
 import json
 import os
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -315,6 +316,24 @@ check(
 )
 check("bubble may push to the fork", allow_push, "alice/TauCeti")
 check("a round without a verdict says so", any("no verdict recorded" in m for m in calls["log"]), True)
+
+# --- the PR hold switch ------------------------------------------------------------------------------
+# Two held PRs in one loop must both survive for the operator to read; neither may reach `gh`.
+wrapper = Path(__file__).resolve().parent.parent / "scripts" / "gh-safe-pr-create"
+hold_root = Path(tempfile.mkdtemp()) / "held"
+hold_env = {k: v for k, v in os.environ.items() if not k.startswith("TAUCETI_")}
+hold_env.update(TAUCETI_HOLD_PR_DIR=str(hold_root), PATH="/nonexistent:/usr/bin:/bin")
+for n in (1, 2):
+    done = subprocess.run(
+        [str(wrapper), "--title", f"refactor: {n}", "--body", f"body {n}", "--head", f"alice:refactor/x{n}-w1"],
+        env=hold_env,
+        capture_output=True,
+        text=True,
+    )
+    check(f"held PR {n} exits 0 without opening", (done.returncode, "NOT opened" in done.stderr), (0, True))
+held = sorted(hold_root.iterdir())
+check("each held PR gets its own directory", len(held), 2)
+check("and keeps its own body", sorted((d / "body.md").read_text() for d in held), ["body 1", "body 2"])
 
 print("FAIL" if fails else "ALL OK")
 sys.exit(1 if fails else 0)

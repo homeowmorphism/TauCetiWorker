@@ -96,8 +96,8 @@ fetched fresh every round.
 
 To read a round's PR before it enters TauCeti's review queue, set
 `TAUCETI_HOLD_PR_DIR` on a host round. The PR wrapper then saves the would-be
-PR's arguments (`args`) and body (`body.md`) in that directory instead of
-opening it. The branch is still pushed to your fork, and the round reports no
+PR's arguments (`args`) and body (`body.md`) instead of opening it. Each held PR
+gets its own timestamped subdirectory there, so a loop can hold several. The branch is still pushed to your fork, and the round reports no
 progress because nothing opened. Open it yourself once you are happy with it.
 The switch lives in the shared wrapper, so it holds roadmap PRs too. Bubble
 rounds don't see it.
