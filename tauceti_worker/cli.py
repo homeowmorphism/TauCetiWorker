@@ -67,6 +67,7 @@ from .constants import (
     EX_ADMISSION_WAIT,
     EX_NOPROGRESS,
     OPENROUTER_MODELS,
+    OPT_IN_TASKS,
     PR_TASKS,
     TAUCETI,
     WORK_TASKS,
@@ -104,10 +105,14 @@ the cascade (priority order; a round does the first that applies):
   overlap-scan  investigate consecutive Mathlib commits up to Tau Ceti's pin
   roadmap   open a new PR for a roadmap item
 
+opt-in (runs only when --only names it, just before roadmap):
+  refactor  A/B-test a design choice in merged code with the mathlib-api skill,
+            and open a refactor PR only when the comparison decides it
+
   With no --only a round walks the whole cascade; --only pins it to a subset,
   --skip drops a subset (and the two combine by subtraction). --pr narrows the
   same round to named pull requests: it filters what the round would already
-  have done, so progress, roadmap, and overlap phases drop out.
+  have done, so progress, roadmap, refactor, and overlap phases drop out.
 
 examples:
   tauceti work                          one round: auto agent, on the host
@@ -117,6 +122,7 @@ examples:
   tauceti work --pr 412                 whatever the cascade wants to do to PR #412
   tauceti work --pr 412,415 --only review,fix   only those two PRs, only those two units
   tauceti work --only roadmap --roadmap-only ReductiveGroups
+  tauceti work --loop --only fix,refactor   tend our PRs, otherwise open an evidence-backed refactor
   tauceti work --loop --roadmap-skip OneParameterSemigroups   leave that area to other workers
   tauceti work --only review --agent claude --bubble
                                         review with Opus inside the Bubble sandbox
@@ -143,6 +149,7 @@ environment (flags win; full reference linked below):
   TAUCETI_GITHUB_ACCOUNT default for --github-account (select the GitHub login)
   TAUCETI_OVERLAP_BATCH_COMMITS  commits per scan session (default 160)
   TAUCETI_MAX_OPEN_PRS   open PR authoring cutoff (default 8)
+  TAUCETI_MATHLIB_API_SKILL_REPO / _REF  the skill refactor rounds follow (default: the pinned commit)
   CLAUDE_CONFIG_DIR      Claude config/credential source (Bubble uses a private macOS handoff)
                          (account switching, where the creds live in a file)
   CODEX_HOME             Codex config/credential source; point it at a private directory to give
@@ -426,7 +433,7 @@ def resolve_tasks(only_vals: list[str], skip_vals: list[str]) -> list[str]:
     skip = set(parse_only(skip_vals, "--skip"))
     if not skip:
         return only
-    allowed = set(only) if only else set(ALLOWED_TASKS)
+    allowed = set(only) if only else set(ALLOWED_TASKS) - set(OPT_IN_TASKS)
     tasks = [t for t in ALLOWED_TASKS if t in allowed and t not in skip]
     if not tasks:
         raise SystemExit("--only/--skip leave no work units enabled")

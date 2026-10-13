@@ -132,6 +132,12 @@ A round does exactly one unit of work: the first of these that applies.
 | **Review** | Review an open PR whose head is green but not yet reviewed, with the `tauceti-review` engine. Maintenance on our own PRs takes priority so author-action work (`ci-failed` or `awaiting-author`) cannot be starved by unrelated reviews. |
 | **Roadmap** | Otherwise, open a new PR advancing a [roadmap](https://github.com/TauCetiProject/TauCetiRoadmap) target. |
 
+One more step runs only when `--only` names it: **Refactor** compares a design
+choice in merged code against an alternative, using the
+[mathlib-api](https://github.com/homeowmorphism/mathlib-api) skill, and opens a
+refactor PR only when the comparison decides it. It runs just before Roadmap.
+See [Refactor rounds](docs/refactor.md).
+
 Review selection is cooperative across community workers. The worker named by
 the latest scoreboard gets a 20-minute first-refusal window on that PR's next
 green head or contest reply. After that window, every worker may take it;

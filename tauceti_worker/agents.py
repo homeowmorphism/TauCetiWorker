@@ -596,6 +596,44 @@ def fetch_git_source(url: str, dir: Path) -> bool:
     return _fetch_shallow(url, dir)
 
 
+_FULL_SHA_RE = re.compile(r"[0-9a-f]{40}")
+
+
+def fetch_pinned(url: str, ref: str, dir: Path) -> str | None:
+    """Worker-owned snapshot of url at ref; return the commit it holds, or None.
+
+    A full SHA is a pin: a clean snapshot already at it is reused, so the fetch happens once per pin
+    rather than once per round, and a fetched one must resolve to exactly it. Any other ref (a branch
+    an operator named to try unreleased text) is fetched every round. Anything else on disk (another
+    pin, edits, a half-finished clone) is discarded rather than trusted."""
+
+    def git(*args: str) -> subprocess.CompletedProcess:
+        return subprocess.run(["git", "-C", str(dir), *args], capture_output=True, text=True)
+
+    def head() -> str:
+        p = git("rev-parse", "HEAD")
+        return p.stdout.strip() if p.returncode == 0 else ""
+
+    pinned = bool(_FULL_SHA_RE.fullmatch(ref))
+    if pinned and (dir / ".git").is_dir() and head() == ref:
+        status = git("status", "--porcelain", "--ignored")
+        if status.returncode == 0 and not status.stdout.strip():
+            return ref
+    shutil.rmtree(dir, ignore_errors=True)
+    dir.mkdir(parents=True, exist_ok=True)
+    for step in (
+        ("init", "-q"),
+        ("remote", "add", "origin", url),
+        ("config", "remote.origin.pushurl", "no_push"),
+        ("fetch", "-q", "--depth", "1", "origin", ref),
+        ("checkout", "-q", "--detach", "FETCH_HEAD"),
+    ):
+        if git(*step).returncode:
+            return None
+    got = head()
+    return got if got and (got == ref or not pinned) else None
+
+
 def host_agent_argv(prompt: str, profile: AuthoringProfile | str) -> tuple[list[str], dict]:
     """The exact argv + env for the host work agent. HERE is on PATH so the agent
     resolves git-safe-push / gh-safe-pr-create / claim.sh; close_fds=True replaces `9>&-`."""

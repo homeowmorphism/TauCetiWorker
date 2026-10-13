@@ -42,6 +42,14 @@ MAX_REVIEW_ERRORS = 3  # per PR: after this many review rounds that ERROR withou
 # charging, which is the pre-existing behaviour rather than a new failure mode.
 REVIEW_PROVIDER_DOWN_EXIT = 3
 
+# The mathlib-api design skill that `refactor` rounds follow (https://github.com/homeowmorphism/mathlib-api).
+# Pinned by SHA, not a branch: its text instructs an agent that pushes to the contributor's fork, so
+# what that agent is told must not change without a reviewed bump here.
+MATHLIB_API_SKILL = os.environ.get("TAUCETI_MATHLIB_API_SKILL_REPO", "homeowmorphism/mathlib-api")
+MATHLIB_API_SKILL_REF = os.environ.get("TAUCETI_MATHLIB_API_SKILL_REF", "d655face80a0ee0f02d2cf9d13b438441ce801b7")
+# Scratch directories a refactor round leaves behind, newest first, kept for the operator to inspect.
+REFACTOR_SCRATCH_KEEP = 20
+
 # Progress reporting (TauCetiProgress). Pinned by SHA, not a branch: the worker's generator and the
 # merge gate in TauCetiRoadmap must run the SAME version, or the worker can emit headers the gate does
 # not recognise and every report wedges. Bump this together with the two pins in
@@ -110,6 +118,8 @@ MAX_LINT_REPAIR_PR_ATTEMPTS = 6  # per-PR lifetime backstop for lint repair acro
 # when main carries environment-lint violations that PR builds, which lint only changed modules,
 # could not see.
 LINT_REPAIR_HEAD_PREFIX = "lint-repair/"
+# Branches opened by `refactor` rounds. Their own backpressure counts these, separately from roadmap scope.
+REFACTOR_HEAD_PREFIX = "refactor/"
 
 # Backpressure: don't author into the selected roadmap scope while this many of our PRs in that scope
 # are open.
@@ -286,9 +296,16 @@ ALLOWED_TASKS = [
     "lint-repair",
     "overlap-scan",
     "overlap-fix",
+    "refactor",
 ]
 
 WORK_TASKS = list(ALLOWED_TASKS)
+
+# Tasks that run only when `--only` names them. An unrestricted round, a `--skip` complement, and the
+# dashboard's auto loop all leave them out, so adding one never changes what an existing fleet does.
+# `refactor` opens a PR on every round it can, which as a cascade fallback would starve roadmap
+# authoring; an operator who wants a refactor worker asks for one.
+OPT_IN_TASKS = ("refactor",)
 
 # Priority for an unrestricted round. Resolve conflicts and adapt a broken Mathlib bump first, then
 # honor the project's globally paced progress reporting. The worker's fix/CI maintenance remains
@@ -305,7 +322,8 @@ PR_TASKS = ("rebase", "bump", "lint-repair", "fix-ci", "fix", "review")
 # The "#" shown in the survey table IS the key you press in the TUI to run one round of that kind.
 # ALLOWED_TASKS deliberately stays the stable display/key order; AUTO_STAGES is the unrestricted
 # runtime priority. Keeping those concepts separate avoids silently rebinding established digit keys.
-KIND_KEYS = {key: name for key, name in zip("1234567890", ALLOWED_TASKS, strict=True)}
+# There are ten digits: a kind past the tenth has no key and is launched by selecting its row.
+KIND_KEYS = dict(zip("1234567890", ALLOWED_TASKS, strict=False))
 
 KIND_BY_NAME = {name: num for num, name in KIND_KEYS.items()}  # "rebase" -> "1", ...
 

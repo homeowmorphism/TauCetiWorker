@@ -29,7 +29,7 @@ import uuid
 from pathlib import Path
 from typing import NoReturn
 
-from .constants import AGENTS, ALLOWED_TASKS
+from .constants import AGENTS, ALLOWED_TASKS, OPT_IN_TASKS
 from .github import unselected_github_env, validate_github_account
 from .paths import HERE, ensure_ssl_cert_file, entry_cmd, self_argv, self_env
 from .quota import parse_pace_curve
@@ -1199,7 +1199,7 @@ def _worker_configuration_lines(item: dict, width: int) -> list[str]:
     raw = item.get("spec")
     spec = raw if isinstance(raw, dict) else {}
     selected = spec.get("only") if isinstance(spec.get("only"), list) else item.get("only")
-    phases = [str(phase) for phase in selected] if selected else list(ALLOWED_TASKS)
+    phases = [str(phase) for phase in selected] if selected else [t for t in ALLOWED_TASKS if t not in OPT_IN_TASKS]
     lines = _status_field("phases", [", ".join(phases)], width)
 
     agent = str(spec.get("agent") or item.get("agent") or "auto")

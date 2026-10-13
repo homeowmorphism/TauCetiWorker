@@ -40,6 +40,7 @@ from .constants import (
     PROGRESS_ATTEMPT_GAP,
     PROGRESS_REF,
     PROGRESS_TTL,
+    REFACTOR_HEAD_PREFIX,
     REVIEW_AFFINITY_GRACE_S,
     REVIEW_AGE_CAP_S,
     REVIEW_AGE_SCALE_S,
@@ -298,6 +299,7 @@ class Survey:
     progress: WorkKind = field(default_factory=lambda: WorkKind("progress"))  # a roadmap report is due
     overlap_scan: WorkKind = field(default_factory=lambda: WorkKind("overlap-scan"))
     overlap_fix: WorkKind = field(default_factory=lambda: WorkKind("overlap-fix"))
+    refactor: WorkKind = field(default_factory=lambda: WorkKind("refactor"))  # opt-in design refactors
     roadmap_only: str = ""
     roadmap_skip: list[str] = field(default_factory=list)
     # This is deliberately scoped by roadmap_only/roadmap_skip: authoring backpressure in a focused
@@ -351,6 +353,7 @@ class Survey:
             "progress": self.progress,
             "overlap-scan": self.overlap_scan,
             "overlap-fix": self.overlap_fix,
+            "refactor": self.refactor,
         }[name]
 
     def rescope_roadmap(self) -> None:
@@ -444,6 +447,39 @@ def roadmap_open_count(prs: list[PRInfo], only: str, skip: list[str]) -> int:
 
     skipped = set(skip)
     return sum((areas := focuses(p)) is None or bool(areas - skipped) for p in prs)
+
+
+def survey_refactor(sv: Survey, mine: list[PRInfo]) -> None:
+    """Offer one refactor round unless our open refactor PRs are at the authoring cutoff.
+
+    The survey offers it whenever there is capacity; whether this worker runs it is run_round's call,
+    because `refactor` is opt-in. Only our `refactor/` branches count: they are the review load this
+    kind of work queues up, and a roadmap scope says nothing about them."""
+    n = sum(1 for p in mine if p.head_ref.startswith(REFACTOR_HEAD_PREFIX))
+    if n >= sv.max_open_prs:
+        sv.refactor.suppressed.append(Candidate(0, "", f"backpressure: {n}/{sv.max_open_prs} refactor PRs open"))
+    else:
+        sv.refactor.actionable.append(Candidate(0, "", f"{n}/{sv.max_open_prs} refactor PRs open; opt-in"))
+
+
+def survey_refactor_only(cfg: Config, gh: GitHub) -> Survey:
+    """The survey a `--only refactor` round needs: our open PRs, for backpressure, and nothing else.
+
+    The full survey reads every open PR's review state, which a round that only authors never uses."""
+    sv = Survey(worker_id=cfg.wid)
+    try:
+        prs = [PRInfo.from_json(d) for d in gh.open_prs()]
+    except GitHubError as e:
+        sv.github_failed = True
+        sv.errors.append(str(e))
+        return sv
+    sv.open_prs = prs
+    nondraft = [p for p in prs if not p.is_draft]
+    me_login = me()
+    sv.n_open_nondraft = len(nondraft)
+    sv.status_labels, sv.n_status_unlabeled = bucket_status_labels(nondraft, me_login)
+    survey_refactor(sv, [p for p in nondraft if p.author == me_login])
+    return sv
 
 
 def spread_candidates(candidates: list, rng=random) -> list:
@@ -705,6 +741,7 @@ def survey(cfg: Config, gh: GitHub, rs: ReviewState, counters: Counters, *, deep
     sv.n_reviewable = sum(1 for p in nondraft if p.build_success)
     sv._mine_open_prs = mine
     sv.rescope_roadmap()
+    survey_refactor(sv, mine)
     # Bucket open non-draft PRs by the STATUS_LABELS pipeline (fixed order), pairing each label's
     # total with the subset this identity authored, for the per-round "open PRs" line.
     sv.status_labels, sv.n_status_unlabeled = bucket_status_labels(nondraft, me_login)

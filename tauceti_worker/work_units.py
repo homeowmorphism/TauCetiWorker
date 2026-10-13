@@ -58,6 +58,7 @@ from .constants import (
     EX_NOPROGRESS,
     MAX_INFRA_REFUNDS,
     OPENROUTER_MODELS,
+    OPT_IN_TASKS,
     PR_TASKS,
     PROGRESS_REF,
     PROGRESS_TOOL_LINE,
@@ -95,6 +96,7 @@ from .survey import (
     progress_argv,
     spread_candidates,
     survey,
+    survey_refactor_only,
 )
 
 # ============================================================================
@@ -104,8 +106,8 @@ from .survey import (
 
 
 def want(only: list[str], task: str) -> bool:
-    """Is this work-unit stage enabled? Empty `only` ⇒ everything (do-whatever-is-helpful)."""
-    return (not only) or (task in only)
+    """Is this work-unit stage enabled? Empty `only` ⇒ everything except the opt-in tasks."""
+    return task in only if only else task not in OPT_IN_TASKS
 
 
 def round_stages(opts):
@@ -324,6 +326,8 @@ def run_round(w: Worker, opts: RoundOpts) -> int:
 
         sv = Survey(worker_id=w.cfg.wid)
         survey_overlaps(w.cfg, w.gh, sv, repair="overlap-fix" in opts.only)
+    elif opts.only == ["refactor"]:
+        sv = survey_refactor_only(w.cfg, w.gh)
     else:
         sv = survey(w.cfg, w.gh, w.rs, w.counters, deep=True)
     if sv.github_failed:
@@ -448,6 +452,16 @@ def run_round(w: Worker, opts: RoundOpts) -> int:
             if rc is not None:
                 return rc  # performed (or dry-run); else (None) claimed-elsewhere → try next candidate
             declined.append((stage, c.pr))
+    # `refactor` is opt-in, so it is not one of round_stages and runs only when --only names it. It
+    # comes after the PR-tending stages, so a `--only fix,refactor` worker answers reviews of the
+    # refactors it opened before it opens another, and before roadmap authoring: with both named,
+    # refactor runs until its own backpressure. Like roadmap, it opens a PR that does not exist yet,
+    # so a --pr round never falls through to it.
+    if want(opts.only, "refactor") and not getattr(opts, "prs", ()):
+        for c in sv.refactor.actionable:
+            rc = dispatch("refactor", w, sv, c, opts)
+            if rc is not None:
+                return rc
     # `roadmap` authors a PR that does not exist yet, so it can never be one of the PRs `--pr` named.
     # A targeted round that finds nothing to do on its targets stops rather than falling through to
     # authoring: the operator asked for those PRs, and unrelated work is not a substitute for them.
@@ -480,7 +494,7 @@ def run_round(w: Worker, opts: RoundOpts) -> int:
         reason = sv.progress.suppressed[0].reason
         if reason:
             raise NoProgress(f"progress: {reason}")
-    for stage in ("overlap-fix", "overlap-scan"):
+    for stage in ("overlap-fix", "overlap-scan", "refactor"):
         if stage in opts.only and sv.kind(stage).suppressed:
             raise NoProgress(f"{stage}: {sv.kind(stage).suppressed[0].reason}")
     raise NoProgress(f"no eligible work this round under {scope}")
@@ -492,12 +506,12 @@ def run_round(w: Worker, opts: RoundOpts) -> int:
 # TAUCETI, and a progress round's PR lands in TauCetiRoadmap, so the guard would report "nothing
 # landed" on every successful report. Its postcondition is `tauceti-progress apply`'s own exit code,
 # which already distinguishes opened / already-in-flight / already-merged.
-PROGRESS_GUARDED = {"rebase", "fix", "fix-ci", "bump", "lint-repair", "roadmap"}
+PROGRESS_GUARDED = {"rebase", "fix", "fix-ci", "bump", "lint-repair", "roadmap", "refactor"}
 
 
 # Stages whose agent edits the checkout. `review` and `progress` do not, and a bubble round works
 # inside the container, so the host checkout would say nothing about it either way.
-FILE_CHANGE_STAGES = {"rebase", "fix", "fix-ci", "bump", "lint-repair", "roadmap"}
+FILE_CHANGE_STAGES = {"rebase", "fix", "fix-ci", "bump", "lint-repair", "roadmap", "refactor"}
 _MAX_CHANGED_FILES = 25
 
 
@@ -808,6 +822,7 @@ def dispatch(stage: str, w: Worker, sv: Survey, c: Candidate, opts: RoundOpts) -
         "roadmap": do_roadmap,
         "overlap-scan": do_overlap_scan,
         "overlap-fix": do_overlap_fix,
+        "refactor": do_refactor,
     }[stage]
     # Announce the round up front so the log says what was chosen, on which PR (as a clickable URL),
     # with which agent and sandbox — the same line for every stage.
@@ -818,6 +833,8 @@ def dispatch(stage: str, w: Worker, sv: Survey, c: Candidate, opts: RoundOpts) -
         what = f"new PR (area: {c.reason or 'any'})"
     elif stage == "progress":
         what = c.reason or "roadmap progress report"
+    elif stage == "refactor":
+        what = "new refactor PR (mathlib-api A/B)"
     else:
         what = c.reason or (c.head[:12] if c.head else "")
     if stage == "review":
@@ -881,6 +898,12 @@ def do_overlap_fix(w, sv, c, opts, bubble):
     from .overlaps import do_fix
 
     return do_fix(w, sv, c, opts, bubble)
+
+
+def do_refactor(w, sv, c, opts, bubble):
+    from .refactor import do_refactor
+
+    return do_refactor(w, sv, c, opts, bubble)
 
 
 def do_review(w: Worker, sv: Survey, c: Candidate, opts: RoundOpts, bubble: bool) -> int:

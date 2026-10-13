@@ -55,7 +55,7 @@ def _kind_note(sv: Survey, name: str) -> tuple[str, str]:
         note = "no broken bump-mathlib PR"
     if name == "lint-repair" and not wk.actionable and not wk.suppressed:
         note = "no red lint-repair PR"
-    if name in ("progress", "overlap-scan", "overlap-fix"):
+    if name in ("progress", "overlap-scan", "overlap-fix", "refactor"):
         # Not about a PR of ours, so the candidate carries pr=0 and _sample's "#0" says nothing. The
         # cadence verdict is the useful cell, whether a report is due or not.
         cands = wk.actionable or wk.suppressed
@@ -144,12 +144,12 @@ def render_survey(
     t.add_column("READY", justify="right")
     t.add_column("SAMPLE / NOTE")
     for name in ALLOWED_TASKS:
-        num = KIND_BY_NAME[name]
+        num = KIND_BY_NAME.get(name, "")
         is_sel = name == selected
         style = "reverse" if is_sel else None  # the arrow-key cursor
         kind_cell = ("▸ " if is_sel else "  ") + name  # marker survives even without color
         ready, note = _roadmap_note(sv, escape) if name == "roadmap" else _kind_note(sv, name)
-        if name in ("overlap-scan", "overlap-fix"):
+        if name in ("overlap-scan", "overlap-fix", "refactor"):
             note = escape(note)
         t.add_row(num, kind_cell, ready, note, style=style)
         if name in expanded:  # tree-style PR / area list under the expanded kind
@@ -513,7 +513,7 @@ def _dashboard_app(cfg, loader=None):
             titles = {p.number: p.title for p in sv.open_prs}
             sel_name = ALLOWED_TASKS[self.sel]
             for name in ALLOWED_TASKS:
-                num = KIND_BY_NAME[name]
+                num = KIND_BY_NAME.get(name, "")
                 is_sel = name == sel_name
                 marker = "▸ " if is_sel else "  "
 

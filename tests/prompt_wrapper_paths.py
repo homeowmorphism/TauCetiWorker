@@ -39,7 +39,7 @@ PROMPTS = tc.paths.HERE / "prompts"
 WRAPPERS = ("git-safe-push", "gh-safe-pr-create", "claim.sh")
 
 # The keys each call site passes, so a prompt that grows a placeholder without a substitution fails
-# here rather than reaching an agent. Mirrors work_units._do_fixlike / do_roadmap.
+# here rather than reaching an agent. Mirrors work_units._do_fixlike / do_roadmap / refactor.do_refactor.
 CALL_SITES = {
     "overlap-scan.md": dict(BATCH="/tmp/batch.json", RESULT="/tmp/result.json"),
     "overlap-fix.md": dict(ISSUE=123, BODY="Evidence", FORK="alice/TauCeti", FORK_OWNER="alice", BIN="/bin"),
@@ -48,6 +48,17 @@ CALL_SITES = {
     "rebase.md": dict(PR=123, AGENT="Claude Code", BIN="/bin"),
     "bump.md": dict(PR=123, AGENT="Claude Code", BIN="/bin"),
     "lint-repair.md": dict(PR=123, AGENT="Claude Code", BIN="/bin"),
+    "refactor.md": dict(
+        AGENT="Claude Code",
+        FORK_OWNER="alice",
+        WORKERID="worker5",
+        EXAMINED="none",
+        SKILL="/opt/mathlib-api",
+        SCRATCH="/opt/scratch",
+        ROADMAP_DIR="/opt/roadmap/TauCetiRoadmap",
+        RUBRICS="/opt/rubrics/rubrics.md",
+        BIN="/bin",
+    ),
     "roadmap.md": dict(
         ONLY="CFSGStatement",
         SKIP="none",
