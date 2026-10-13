@@ -46,10 +46,12 @@ at the use site can undo, or an asymmetry that disappears once the missing line
 is written ends the round without a PR. The worker logs that as no progress, and
 the loop backs off as usual.
 
-The PR body states the verdict's kind, the decisive probe result, the pinned
-precedents, and the honest flip side. It carries `Roadmap:` attribution taken
-from the PR that introduced the declaration, as TauCeti's `AGENTS.md` asks of
-refactors.
+The PR reads like any other TauCeti refactor. Its body explains the change,
+the consumer proof it helps, the Mathlib precedent with links, and what the old
+design did better, if anything. Neither the body, the commit, nor the code
+describes the method: the skill, the comparison and the scratch files stay out
+of everything public. The PR carries `Roadmap:` attribution taken from the PR
+that introduced the declaration, as TauCeti's `AGENTS.md` asks of refactors.
 
 ## Evidence stays local
 
@@ -66,12 +68,13 @@ names the 40 most recent declarations so the agent looks somewhere new.
 
 ## Coordination
 
-The agent claims `author/refactor/<id>` in the worker's claim namespace before
-building. The `<id>` is `refactor-` followed by the slugged full name of the
-declaration whose design changes. The PR body carries the matching marker,
-`<!--tauceti-target:v1 {"focus":"refactor","id":"<id>"}-->`. TauCeti's
-housekeeping dedups open PRs on that id. The `refactor-` prefix keeps it
-distinct from roadmap target ids.
+The agent claims `author/<focus>/<id>` in the worker's claim namespace before
+building, the same shape roadmap authoring uses. The `<focus>` is the roadmap
+area named on the PR's `Roadmap:` line, or `none`. The `<id>` is the slugged
+name of the declaration whose design changes, without its `TauCeti.` prefix.
+The PR body carries the matching marker,
+`<!--tauceti-target:v1 {"focus":"<focus>","id":"<id>"}-->`, and TauCeti's
+housekeeping dedups open PRs on that id.
 
 Branches are named `refactor/<slug>-<worker-id>`. The survey counts our open
 `refactor/` PRs against `TAUCETI_MAX_OPEN_PRS` (default 8) and stops offering
@@ -84,3 +87,13 @@ Rounds read the skill at the commit pinned in `constants.py`
 to your fork. To try other text, set `TAUCETI_MATHLIB_API_SKILL_REPO` and
 `TAUCETI_MATHLIB_API_SKILL_REF`. A full SHA is verified exactly. A branch name is
 fetched fresh every round.
+
+## Holding a PR for review
+
+To read a round's PR before it enters TauCeti's review queue, set
+`TAUCETI_HOLD_PR_DIR` on a host round. The PR wrapper then saves the would-be
+PR's arguments (`args`) and body (`body.md`) in that directory instead of
+opening it. The branch is still pushed to your fork, and the round reports no
+progress because nothing opened. Open it yourself once you are happy with it.
+The switch lives in the shared wrapper, so it holds roadmap PRs too. Bubble
+rounds don't see it.

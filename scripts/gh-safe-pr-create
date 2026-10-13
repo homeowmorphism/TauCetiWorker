@@ -10,6 +10,7 @@
 #   TAUCETI_AUTHOR_CLAIM_KEY   the author/<area>/<target-id> claim acquired in shell before the agent ran
 #   TAUCETI_TARGET_MARKER      the exact <!--tauceti-target:v1 {...}--> string the PR body must contain
 #   TAUCETI_CLAIM_SH           path to claim.sh (default: alongside this script)
+#   TAUCETI_HOLD_PR_DIR        if set, save the PR's args and body there instead of opening it
 # All `gh pr create` flags pass through unchanged.
 set -uo pipefail
 
@@ -54,6 +55,19 @@ elif [[ "$REQUIRE_MARKER" == "1" ]]; then
         || die "PR body is missing a target marker. Add a line like:
   <!--tauceti-target:v1 {\"focus\":\"<area>\",\"id\":\"<slug>\"}-->
 It lets other agents and the dup-sweeper recognize which roadmap target this PR authors."
+fi
+
+# 3) Operator hold (host rounds): save the would-be PR instead of opening it, so a human reads the
+#    exact title, body and branch first. The branch is already on the fork, but nothing reaches the
+#    base repository's review queue until the operator opens the PR from the saved files.
+HOLD_DIR="${TAUCETI_HOLD_PR_DIR:-}"
+if [[ -n "$HOLD_DIR" ]]; then
+    mkdir -p "$HOLD_DIR" || die "cannot create the hold directory $HOLD_DIR"
+    pr_body_from_args "$@" > "$HOLD_DIR/body.md"
+    printf '%q\n' "$@" > "$HOLD_DIR/args"
+    echo "gh-safe-pr-create: HELD for operator review in $HOLD_DIR — the PR was NOT opened." >&2
+    echo "gh-safe-pr-create: do not retry or open it another way; report the PR as held and stop." >&2
+    exit 0
 fi
 
 echo "gh-safe-pr-create: gh pr create $*" >&2

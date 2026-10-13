@@ -33,13 +33,16 @@ A rubric-level defect that slipped into merged code is a fair target too, but it
 - **One axis, one PR.** If you find several, pick the one with the strongest evidence and report the others.
 
 ## Claim your target
-Derive the target id from the fully qualified name of the primary declaration whose design changes: lowercase it, replace every run of non-alphanumeric characters with a single `-`, and prefix `refactor-`. Example: `TauCeti.Group.wordMetric` gives `refactor-tauceti-group-wordmetric`. Another agent refactoring the same declaration must produce the same id. Claim it before building:
+- **The id** comes from the primary declaration whose design changes: take its fully qualified name, drop a leading `TauCeti.`, lowercase it, and replace every run of non-alphanumeric characters with a single `-`. Example: `TauCeti.Group.wordMetric` gives `group-wordmetric`. Another agent refactoring the same declaration must produce the same id.
+- **The focus** is the roadmap area that chiefly motivates the code, or `none`. Take it from the `Roadmap:` line of the PR that introduced the declaration (`git log -S '<name>' --format='%H %s' -- TauCeti/`, then `gh pr view`). Otherwise use the canonical directory name under `__ROADMAP_DIR__/`. Never infer it from a `TauCeti/` path, and never write to the roadmaps.
+
+Claim it before building:
 ```
-"__BIN__/claim.sh" acquire "author/refactor/<id>"
+"__BIN__/claim.sh" acquire "author/<focus>/<id>"
 ```
-Exit `0`: it is yours. Exit `1`: another agent holds it, so choose a different declaration. Exit `2`: the claim could not be registered; proceed anyway. The PR body must carry this exact line, with the same id:
+Exit `0`: it is yours. Exit `1`: another agent holds it, so choose a different declaration. Exit `2`: the claim could not be registered; proceed anyway. The PR body must carry this exact line, with the same focus and id:
 ```
-<!--tauceti-target:v1 {"focus":"refactor","id":"<id>"}-->
+<!--tauceti-target:v1 {"focus":"<focus>","id":"<id>"}-->
 ```
 
 ## Run the comparison
@@ -56,7 +59,7 @@ Then name the verdict's kind, per `design-axes.md` §0:
 
 **Open a PR only for a mechanism, or for a count that a probe confirms as friction in a real consumer.** A judgment call, an unrecoverable regression, or an asymmetry you could erase ends the round without a PR. Then release your claim:
 ```
-"__BIN__/claim.sh" release "author/refactor/<id>"
+"__BIN__/claim.sh" release "author/<focus>/<id>"
 ```
 
 ## Record the verdict, always
@@ -97,15 +100,14 @@ You author from your own fork (`__FORK_OWNER__/TauCeti`). The wrappers already p
   ```
   "__BIN__/gh-safe-pr-create" --repo TauCetiProject/TauCeti --base main --head __FORK_OWNER__:refactor/<short-slug>-__WORKERID__ --title "refactor: <subject>" --body-file <file>
   ```
-- The PR body has no section headings. It opens with a paragraph beginning "This PR …" in the imperative present. Then it gives the evidence in prose:
-  - the axis and the consumers;
-  - the verdict's kind;
-  - the decisive probe result: the verbatim error line, or the before and after proof lengths;
-  - the pinned precedents, in the skill's Phase 5 citation order;
-  - the honest flip side, including what the old design did better, if anything.
-- After the evidence, the body lists each removed public declaration and what replaces it.
-- The body carries a standalone `Roadmap: <Area>` line naming the roadmap that chiefly motivates the code, or `Roadmap: none`. Take it from the `Roadmap:` line of the PR that introduced the declaration (`git log -S '<name>' --format='%H %s' -- TauCeti/`, then `gh pr view`). Otherwise use the canonical directory name under `__ROADMAP_DIR__/`. Never infer it from a `TauCeti/` path, and never write to the roadmaps.
-- The body includes the target marker from the claim step (the wrapper rejects the PR without it) and ends with `🤖 Prepared with __AGENT__`.
+- The PR body reads like any other Tau Ceti refactor: it is about the code, not about how you found the change. It has no section headings. It opens with a paragraph beginning "This PR …" in the imperative present, then explains in plain prose:
+  - what changes, and which callers move with it;
+  - why the new design is better, shown through the consumer it helps: the proof that needed a workaround and no longer does, or the before and after lengths;
+  - the Mathlib precedent, with links (PR URL, commit, or `path:line`), most relevant first;
+  - what the old design did better, if anything.
+- After that, the body lists each removed public declaration and what replaces it.
+- **Describe the code, not your process.** The PR body, commit message, docstrings and code comments are about the mathematics and the code. They do not narrate how the target was chosen or name your tooling (the skill, scratch files, side-by-side comparisons, verdict kinds, this worker). This is omission, never misstatement: say nothing untrue about how the change was made, and keep the footer below. Your closing report, which stays local, is where the method goes.
+- The body carries a standalone `Roadmap: <focus>` line (`Roadmap: none` when the focus is `none`), the target marker from the claim step (the wrapper rejects the PR without one), and ends with `🤖 Prepared with __AGENT__`.
 
 ## Report
 End with a concise summary:
