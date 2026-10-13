@@ -453,10 +453,10 @@ def run_round(w: Worker, opts: RoundOpts) -> int:
                 return rc  # performed (or dry-run); else (None) claimed-elsewhere → try next candidate
             declined.append((stage, c.pr))
     # `refactor` is opt-in, so it is not one of round_stages and runs only when --only names it. It
-    # comes after the PR-tending stages, so a `--only fix,refactor` worker answers reviews of the
-    # refactors it opened before it opens another, and before roadmap authoring: with both named,
-    # refactor runs until its own backpressure. Like roadmap, it opens a PR that does not exist yet,
-    # so a --pr round never falls through to it.
+    # comes after the PR-tending stages, so a `--only rebase,fix-ci,fix,refactor` worker repairs and
+    # answers reviews of the refactors it opened before it opens another, and before roadmap
+    # authoring: with both named, refactor runs until its own backpressure. Like roadmap, it opens a
+    # PR that does not exist yet, so a --pr round never falls through to it.
     if want(opts.only, "refactor") and not getattr(opts, "prs", ()):
         for c in sv.refactor.actionable:
             rc = dispatch("refactor", w, sv, c, opts)

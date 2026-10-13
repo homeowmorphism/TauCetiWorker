@@ -7,9 +7,13 @@ skill. It builds both designs in scratch, runs the same consumer proofs against
 each, and opens a PR only when the comparison decides the question.
 
 ```bash
-tauceti work --only refactor               # one refactor round
-tauceti work --loop --only fix,refactor    # answer reviews of our PRs first, then refactor
+tauceti work --only refactor                            # one refactor round
+tauceti work --loop --only rebase,fix-ci,fix,refactor   # tend our open PRs first, then refactor
 ```
+
+Keep `rebase` and `fix-ci` in a refactor loop. `fix` only answers reviews, and a
+PR whose build is red gets no review. Without them, a refactor PR that conflicts
+with main or fails CI just waits for you.
 
 The phase is opt-in. It runs only when `--only` names it, and the full cascade,
 `--skip`, and the dashboard's auto loop all leave it out. Every round that can
@@ -97,3 +101,8 @@ opening it. The branch is still pushed to your fork, and the round reports no
 progress because nothing opened. Open it yourself once you are happy with it.
 The switch lives in the shared wrapper, so it holds roadmap PRs too. Bubble
 rounds don't see it.
+
+Nothing updates a held branch, and CI checks a PR's whole tree with the current
+guards. So if main fixes something before you open the PR, the PR can fail on a
+file it never touched. Merge main into the branch before opening it, or open it
+and let a loop that includes `fix-ci` repair it.

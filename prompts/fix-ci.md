@@ -15,6 +15,7 @@ You are fixing FAILING CI on pull request #__PR__ of TauCetiProject/TauCeti, an 
   if [ "$have_base" = 1 ] && git diff --quiet "$base_ref" -- lake-manifest.json lean-toolchain; then shim_args+=(--only-new); fi
   if [ -f scripts/check-expired-mathlib-shims.py ]; then python3 scripts/check-expired-mathlib-shims.py "${shim_args[@]}"; fi
   rm -f "$base_shims"; rm -rf "$base_root"
+  if [ -f scripts/check_source_options.py ]; then python3 scripts/check_source_options.py TauCeti/ TauCeti.lean; fi
   lake build
   lake exe axioms
   lake exe module-system
@@ -42,6 +43,7 @@ You are fixing FAILING CI on pull request #__PR__ of TauCetiProject/TauCeti, an 
 
 ## Fix it on its merits
 - Diagnose the real cause (a broken proof, a renamed/missing Mathlib lemma, a linter error, an axiom-audit failure, a flaky/transient infra error). Fix the underlying problem.
+- If any check fails on a file your PR does not change, your branch is probably behind main. CI checks the PR's whole tree with the current guards, so text that main has since fixed still fails on an old branch. Merge `main` into the branch and re-check before you edit that file: editing it yourself duplicates main's fix and invites a conflict.
 - If the shim-expiry command fails, its annotations name exact Mathlib replacements and affected sources. Migrate only the superseded declarations/imports, preserve or re-home source-only API, and update `TauCeti/mathlib-shims.json` in the same source-only change. The checker derives each inherited source's declaration surface from the PR merge base and ratchets its probes until that surface is migrated, deleted, or re-homed under an entry preserving those probes, so never make the check green by merely deleting probes or changing an exact target to a speculative/landing sentinel.
 - If the failure is genuinely transient/infra (e.g. cache fetch timeout), the code and shim-expiry command are green locally, and the failed logs contain no actionable migration, do NOT hack the code — push an empty commit to re-trigger CI (`git commit --allow-empty -m "chore: re-trigger CI"`) and say so in your report.
 - Prefer the smallest correct fix. If a declaration is unsalvageable, it is better to remove it than to leave the PR red — but never gut the PR into vacuity; if almost nothing survives, stop and report that rather than pushing an empty shell.
@@ -64,6 +66,7 @@ if git show "$base_ref":TauCeti/mathlib-shims.json > "$base_shims" 2>/dev/null; 
 if [ "$have_base" = 1 ] && git diff --quiet "$base_ref" -- lake-manifest.json lean-toolchain; then shim_args+=(--only-new); fi
 if [ -f scripts/check-expired-mathlib-shims.py ]; then python3 scripts/check-expired-mathlib-shims.py "${shim_args[@]}"; fi
 rm -f "$base_shims"; rm -rf "$base_root"
+if [ -f scripts/check_source_options.py ]; then python3 scripts/check_source_options.py TauCeti/ TauCeti.lean; fi
 lake build
 lake exe axioms
 lake exe module-system

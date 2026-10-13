@@ -108,10 +108,12 @@ def fake_dispatch(stage, w, sv, c, opts):
 tc.work_units.dispatch = fake_dispatch
 
 
-def survey_with(*, fix=False, refactor_ok=True):
+def survey_with(*, fix=False, red=False, refactor_ok=True):
     sv = tc.Survey(worker_id="t")
     if fix:
         sv.needs_fix.actionable.append(tc.Candidate(7, "abc"))
+    if red:
+        sv.red_ci.actionable.append(tc.Candidate(8, "def", "build failed at head"))
     target = sv.refactor.actionable if refactor_ok else sv.refactor.suppressed
     target.append(tc.Candidate(0, "", "offered" if refactor_ok else "backpressure: 8/8 refactor PRs open"))
     return sv
@@ -137,6 +139,11 @@ check(
     "--only fix,refactor tends our PRs first",
     round_over(lambda: survey_with(fix=True), ["fix", "refactor"])[0],
     ["fix"],
+)
+check(
+    "the documented refactor loop repairs a red PR before opening another",
+    round_over(lambda: survey_with(red=True), ["rebase", "fix-ci", "fix", "refactor"])[0],
+    ["fix-ci"],
 )
 check(
     "refactor runs ahead of roadmap when both are named",

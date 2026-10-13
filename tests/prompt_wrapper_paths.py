@@ -132,6 +132,10 @@ def main():
         check(f"{name}: migrates the AI-owned registry", "TauCeti/mathlib-shims.json" in prompt)
         check(f"{name}: forbids weakening exact targets", "never make the check green" in prompt)
     check(
+        "fix-ci.md: reproduces and verifies the source-option guard",
+        (PROMPTS / "fix-ci.md").read_text().count("python3 scripts/check_source_options.py TauCeti/ TauCeti.lean") == 2,
+    )
+    check(
         "fix-ci.md: source PRs probe only changed obligations",
         (PROMPTS / "fix-ci.md").read_text().count("--only-new") == 2,
     )

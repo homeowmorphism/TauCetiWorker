@@ -122,7 +122,8 @@ examples:
   tauceti work --pr 412                 whatever the cascade wants to do to PR #412
   tauceti work --pr 412,415 --only review,fix   only those two PRs, only those two units
   tauceti work --only roadmap --roadmap-only ReductiveGroups
-  tauceti work --loop --only fix,refactor   tend our PRs, otherwise open an evidence-backed refactor
+  tauceti work --loop --only rebase,fix-ci,fix,refactor
+                                        tend our PRs, otherwise open an evidence-backed refactor
   tauceti work --loop --roadmap-skip OneParameterSemigroups   leave that area to other workers
   tauceti work --only review --agent claude --bubble
                                         review with Opus inside the Bubble sandbox
