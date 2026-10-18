@@ -53,6 +53,7 @@ CALL_SITES = {
         FORK_OWNER="alice",
         WORKERID="worker5",
         EXAMINED="none",
+        FINDINGS="none",
         SKILL="/opt/mathlib-api",
         SCRATCH="/opt/scratch",
         ROADMAP_DIR="/opt/roadmap/TauCetiRoadmap",

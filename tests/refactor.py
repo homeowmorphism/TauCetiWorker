@@ -3,7 +3,8 @@
 
 Dependency-free; no network. Covers the opt-in gate (want, --skip, the dashboard keys), where the
 real run_round dispatches refactor, its backpressure, the verdict ledger that steers later rounds
-away from examined declarations, and what do_refactor hands the agent on the host and in Bubble.
+away from examined declarations, the review-findings ledger that carries reviewers' findings into
+later self-reviews, and what do_refactor hands the agent on the host and in Bubble.
 """
 
 import json
@@ -224,6 +225,126 @@ with open(cfg.state / refactor.LEDGER, "a") as ledger:
     ledger.write("garbage\n")
 check("a corrupt ledger line is skipped", len(refactor.examined(cfg).split("\n  ")), 2)
 
+
+# --- the review-findings ledger --------------------------------------------------------------------------
+# Thread roots and contest answers in the shape the review engine posts them (cf. #16534, #3805).
+def root(cid, rubric, verdict, summary, at, *, fix="Do the thing.", meta=True):
+    icon = "⛔" if verdict == "block" else "🟡"
+    body = (
+        f"<!--tauceti-rubric:{rubric}-->\n### {icon} {rubric} — {verdict}  `codex/gpt-5.6-terra`\n\n"
+        f"{summary}\n\n- `TauCeti/X.lean:23` — this PR's instance. _Fix:_ {fix}\n\n"
+        "Reply in this thread to contest a finding; that re-runs **only** this rubric.\n\n"
+    )
+    if meta:
+        body += '<!--tauceti-meta:v1 {"kind":"thread","rubric":"%s","runs":[{"verdict":"%s"}]}-->' % (rubric, verdict)
+    return {"id": cid, "in_reply_to_id": None, "body": body, "created_at": at}
+
+
+def answer(cid, parent, rubric, cleared):
+    outcome = "this clears the finding ✅ — approved on `abc`." if cleared else "the finding stands — still wrong."
+    body = (
+        f"<!--tauceti-reply:{rubric}:through:1-->\n**Re: your reply on `{rubric}` —** re-reviewed on `abc`; {outcome}"
+    )
+    return {"id": cid, "in_reply_to_id": parent, "body": body}
+
+
+thread = [
+    root(10, "correctness", "block", "Docs claim a property\nthat fails at zero.", "2026-10-14T16:30:00Z"),
+    {"id": 11, "in_reply_to_id": 10, "body": "a human note, not a contest"},
+    root(20, "api-design", "request_changes", "Missing simp.", "2026-10-14T13:00:00Z"),
+    answer(21, 20, "api-design", cleared=True),
+    answer(22, 20, "api-design", cleared=False),
+    root(30, "naming", "request_changes", "Conceded after contest.", "2026-10-14T13:01:00Z"),
+    answer(31, 30, "naming", cleared=False),
+    answer(32, 30, "naming", cleared=True),
+    root(40, "scope", "approve", "Approved, so no thread should count.", "2026-10-14T13:02:00Z"),
+    root(50, "attribution", "request_changes", "Credit only in the PR body.", "2026-10-14T12:00:00Z", meta=False),
+    {"id": 60, "in_reply_to_id": None, "body": "a plain review comment"},
+]
+found = refactor.review_findings(thread)
+check(
+    "standing findings, oldest first; an approval and a conceded contest drop out",
+    [f["rubric"] for f in found],
+    ["attribution", "api-design", "correctness"],
+)
+check("the newest contest answer decides", "api-design" in [f["rubric"] for f in found], True)
+check("the header is the fallback verdict", found[0]["verdict"], "request_changes")
+check("a wrapped summary is one line", found[2]["summary"], "Docs claim a property that fails at zero.")
+check("the first finding's fix is kept", found[2]["fix"], "Do the thing.")
+
+
+class FindingsGitHub:
+    def __init__(self, prs, comments):
+        self.prs, self.comments, self.read = prs, comments, []
+
+    def pr_list(self, fields, *, author=None, state="open"):
+        self.author_state = (author, state)
+        return self.prs
+
+    def review_comments(self, number):
+        self.read.append(number)
+        return self.comments.get(number)
+
+
+cfg = make_cfg()
+check("no findings yet reads as none", refactor.findings(cfg), "none")
+fake = FindingsGitHub(
+    [
+        {"number": 7, "headRefName": "refactor/a-w1", "updatedAt": "t1"},
+        {"number": 8, "headRefName": "feat/roadmap-w1", "updatedAt": "t1"},
+        {"number": 9, "headRefName": "refactor/b-w1", "updatedAt": "t1"},
+    ],
+    {7: thread, 8: thread, 9: None},
+)
+check("the first harvest re-reads the PR it could fetch", refactor.harvest_findings(cfg, fake, "alice"), 1)
+check("it lists this login's PRs in every state", fake.author_state, ("alice", "all"))
+check("only refactor branches are read", fake.read, [7, 9])
+fake.read = []
+check("an unmoved PR is not re-read", refactor.harvest_findings(cfg, fake, "alice"), 0)
+check("a failed fetch is retried next harvest", fake.read, [9])
+lines = refactor.findings(cfg).split("\n  ")
+check("newest first", [ln.split(":")[0] for ln in lines][0], '- #7 "correctness", "block"')
+check(
+    "reviewers' text is JSON-quoted data",
+    lines[0],
+    '- #7 "correctness", "block": "Docs claim a property that fails at zero." Fix: "Do the thing."',
+)
+fake.prs[0]["updatedAt"] = "t2"
+fake.comments[7] = [root(70, "documentation", "block", 'Says "__BIN__" twice.', "2026-10-15T00:00:00Z")]
+fake.read = []
+check("a moved PR is re-read", (refactor.harvest_findings(cfg, fake, "alice"), fake.read), (1, [7, 9]))
+check(
+    "and its findings are replaced",
+    refactor.findings(cfg),
+    '- #7 "documentation", "block": "Says \\"__BIN__\\" twice." Fix: "Do the thing."',
+)
+
+cfg = make_cfg()
+many = [root(100 + i, "api-design", "block", f"finding {i % 15}", f"2026-10-14T00:{i:02d}:00Z") for i in range(30)]
+refactor.harvest_findings(
+    cfg, FindingsGitHub([{"number": 1, "headRefName": "refactor/x", "updatedAt": "t"}], {1: many}), "a"
+)
+shown = refactor.findings(cfg).split("\n  ")
+check("at most FINDINGS_SHOWN are named", len(shown), refactor.FINDINGS_SHOWN)
+check("a finding restated in a later round is named once", len({ln.split(": ", 1)[1] for ln in shown}), len(shown))
+
+
+class BrokenGitHub:
+    def pr_list(self, *a, **k):
+        raise tc.github.GitHubError("rate limited")
+
+
+logged = []
+refactor.log, real_log = logged.append, refactor.log
+refactor.me = lambda: "alice"  # stays patched: the do_refactor rounds below must not reach GitHub
+before = refactor.findings(cfg)
+refactor.refresh_findings(cfg, BrokenGitHub())
+check("a GitHub failure never fails the round", any("could not refresh review findings" in m for m in logged), True)
+check("and the last harvest still stands", refactor.findings(cfg), before)
+(cfg.state / refactor.FINDINGS).write_text("{corrupt")
+check("a corrupt ledger reads as none", refactor.findings(cfg), "none")
+refactor.log = real_log
+
 # --- scratch directories and the exclude backstop -------------------------------------------------------
 cfg = make_cfg()
 root = cfg.state / "refactor-scratch"
@@ -248,7 +369,8 @@ check(
 
 # --- do_refactor: what the agent is handed ---------------------------------------------------------------
 cfg = make_cfg()
-worker = tc.Worker(cfg, None, None, tc.Counters(cfg), None, None)
+reviewed = FindingsGitHub([{"number": 5, "headRefName": "refactor/a-w1", "updatedAt": "t"}], {5: thread})
+worker = tc.Worker(cfg, reviewed, None, tc.Counters(cfg), None, None)
 calls = {}
 refactor.fetch_ref = lambda repo, d: d.mkdir(parents=True, exist_ok=True) or True
 refactor.fetch_pinned = lambda url, ref, d: calls.setdefault("pinned", (url, ref)) and ref
@@ -290,6 +412,13 @@ check("the marker is required", os.environ.get("TAUCETI_REQUIRE_TARGET_MARKER"),
 check("claims go to the worker's namespace", os.environ.get("CLAIM_REPO"), "TauCetiProject/tauceti-claims")
 check("a fresh branch push is create-only", "TAUCETI_PUSH_EXPECT" in os.environ, False)
 check("pushes go to the fork", os.environ.get("TAUCETI_PUSH_REMOTE"), "https://github.com/alice/TauCeti")
+check("the round harvests review findings first", reviewed.read, [5])
+check(
+    "the self-review names them",
+    '- #5 "correctness", "block": "Docs claim a property that fails at zero."' in prompt,
+    True,
+)
+check("no placeholder is left unfilled", "__FINDINGS__" in prompt, False)
 check("the verdict is folded into the ledger", refactor.examined(cfg).startswith('- "refactor-x"'), True)
 check("the next prompt would name it", "refactor-x" in refactor.examined(cfg), True)
 check(
@@ -315,6 +444,7 @@ check(
     True,
 )
 check("bubble may push to the fork", allow_push, "alice/TauCeti")
+check("bubble's self-review names the findings too", '- #5 "correctness", "block"' in prompt, True)
 check("a round without a verdict says so", any("no verdict recorded" in m for m in calls["log"]), True)
 
 # --- the PR hold switch ------------------------------------------------------------------------------

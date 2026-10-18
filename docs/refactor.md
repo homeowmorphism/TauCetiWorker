@@ -70,6 +70,29 @@ The agent also leaves a one-line `verdict.json` in that directory. The worker
 appends it to `refactor-verdicts.jsonl` in its state, and the next round's prompt
 names the 40 most recent declarations so the agent looks somewhere new.
 
+## Learning from review
+
+Before it opens a PR, the agent reviews its own diff against every rubric. The
+prompt names three things a refactor tends to leave stale around the axis it
+changed, each of which sent an early refactor PR back:
+- docs that the new design made false: once `ℕ+` became `(m : ℕ) [NeZero m]`, a
+  module docstring still called every lattice definite, which fails at `m = 0`;
+- a new characteristic equation without `@[simp]`;
+- a Mathlib precedent credited in the PR body but not in the docstring, which the
+  `attribution` rubric reads.
+
+Findings like these are also collected automatically. At the start of each round
+the worker reads the rubric threads on every `refactor/` PR this login has opened,
+in any state. It keeps each blocking finding in `review-findings.json` in its state,
+and names the 12 most recent in the self-review step of the next prompt. A finding
+stays even after the PR fixed it, because the point is not to repeat it. One that
+the reviewer withdrew after a contest ("this clears the finding") is dropped. Only
+PRs whose `updatedAt` moved are re-read, so a quiet round costs one PR-list query.
+If GitHub can't be reached, the round goes ahead with the last harvest.
+
+This is a different job from the `fix` phase. `fix` answers the findings on one
+PR. The ledger carries the lesson into the PRs that come after it.
+
 ## Coordination
 
 The agent claims `author/<focus>/<id>` in the worker's claim namespace before
