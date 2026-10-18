@@ -1,5 +1,49 @@
 # Tau Ceti Worker
 
+## About this branch
+
+This is `refactor-phase-mathlib-api`, a branch of
+[TauCetiProject/TauCetiWorker](https://github.com/TauCetiProject/TauCetiWorker)
+that adds one opt-in kind of work: **refactor** rounds. Unless you name
+`refactor` in `--only`, the worker does the same work as upstream, and the rest
+of this README describes upstream.
+
+A refactor round looks for a design choice in merged TauCeti code that was
+never compared against an alternative. Typical cases are `ℕ+` versus
+`(m : ℕ) [NeZero m]`, or a fixed classical `DecidableEq` instance versus the
+caller's own. The round builds both designs side by side, following the
+[mathlib-api](https://github.com/homeowmorphism/mathlib-api) skill. It then
+replays the TauCeti proofs that use the declaration against each design. It
+opens a PR only when one design makes such a proof fail or need a workaround
+and the other does not.
+
+The branch also adds two supporting pieces:
+- `TAUCETI_HOLD_PR_DIR` holds a round's PR so you can read it before opening it.
+- Each round reads the review findings on its earlier refactor PRs and checks
+  its own diff for the same mistakes.
+
+The first run, in October 2026, opened six PRs. Three merged on their first
+review: [#16060](https://github.com/TauCetiProject/TauCeti/pull/16060),
+[#16536](https://github.com/TauCetiProject/TauCeti/pull/16536) and
+[#16538](https://github.com/TauCetiProject/TauCeti/pull/16538). The other three
+each drew one finding, and the self-review now checks for all three kinds of
+mistake.
+
+To install from this branch and run a refactor worker:
+
+```bash
+uv tool install git+https://github.com/homeowmorphism/TauCetiWorker@refactor-phase-mathlib-api
+tauceti work --loop --only rebase,fix-ci,fix,refactor
+```
+
+Keep `rebase`, `fix-ci` and `fix` in the loop, so the worker tends the PRs it
+opened. [Refactor rounds](docs/refactor.md) has the details.
+
+The branch is based on upstream `main` at commit `523e0c3`. It has not been
+proposed upstream.
+
+---
+
 `tauceti` keeps the [TauCeti](https://github.com/TauCetiProject/TauCeti) Lean
 library moving, using a "bring your own agent" approach. Run it with no command
 and you get a dashboard of the work the queue needs right now: PRs to review,
